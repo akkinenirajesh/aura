@@ -17,4 +17,10 @@ package org.auraframework.util.type;
 
 public class CustomParentType {
 
+    public CustomParentType(String s) {
+    }
+
+	public CustomParentType() {
+	}
+
 }

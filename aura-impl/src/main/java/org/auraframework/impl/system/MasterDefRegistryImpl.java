@@ -248,7 +248,7 @@ public class MasterDefRegistryImpl implements MasterDefRegistry {
     public <D extends Definition> Set<DefDescriptor<D>> find(@NonNull DefDescriptor<D> matcher) {
         Set<DefDescriptor<D>> matched;
         if (matcher.getNamespace().equals("*")) {
-            matched = new LinkedHashSet<DefDescriptor<D>>();
+            matched = new LinkedHashSet<>();
             String qualifiedNamePattern = null;
             switch (matcher.getDefType()) {
             case CONTROLLER:
@@ -279,11 +279,14 @@ public class MasterDefRegistryImpl implements MasterDefRegistry {
             case THEME:
             case THEME_DEF_REF:
             case VAR:
+            case DESIGN:
+            case ATTRIBUTE_DESIGN:
                 qualifiedNamePattern = "%s://%s:%s";
                 break;
             case ACTION:
             case DESCRIPTION:
             case EXAMPLE:
+            case INCLUDE:
                 // TODO: FIXME
                 throw new AuraRuntimeException(String.format("Find on %s defs not supported.", matcher.getDefType()
                         .name()));
@@ -421,9 +424,6 @@ public class MasterDefRegistryImpl implements MasterDefRegistry {
         /** Is this def's dependencies cacheable? */
         public boolean shouldCacheDependencies;
 
-        // TODO: remove preloads
-        public boolean addedPreloads = false;
-
         public CompileContext(DefDescriptor<? extends Definition> topLevel, List<ClientLibraryDef> clientLibs) {
             this.clientLibs = clientLibs;
             this.topLevel = topLevel;
@@ -441,7 +441,7 @@ public class MasterDefRegistryImpl implements MasterDefRegistry {
             @SuppressWarnings("unchecked")
             CompilingDef<D> cd = (CompilingDef<D>) compiled.get(descriptor);
             if (cd == null) {
-                cd = new CompilingDef<D>(descriptor);
+                cd = new CompilingDef<>(descriptor);
                 compiled.put(descriptor, cd);
             }
             return cd;
@@ -979,7 +979,7 @@ public class MasterDefRegistryImpl implements MasterDefRegistry {
      * @throws QuickFixException if something has gone terribly wrong.
      */
     private <D extends Definition> void validateHelper(@NonNull DefDescriptor<D> descriptor) throws QuickFixException {
-        CompilingDef<D> compiling = new CompilingDef<D>(descriptor);
+        CompilingDef<D> compiling = new CompilingDef<>(descriptor);
         currentCC.compiled.put(descriptor, compiling);
     }
 
@@ -1110,8 +1110,8 @@ public class MasterDefRegistryImpl implements MasterDefRegistry {
         boolean cacheable;
         boolean regExists;
 
-        if (defs.get(descriptor) != null) {
-            return true;
+        if (hasLocalDef(descriptor)) {
+            return getLocalDef(descriptor) != null;
         }
         DefRegistry<D> reg = getRegistryFor(descriptor);
         if (reg == null) {
@@ -1151,6 +1151,10 @@ public class MasterDefRegistryImpl implements MasterDefRegistry {
             }
         } finally {
             rLock.unlock();
+        }
+        if (regExists == false) {
+            // Cache negatives to avoid excessive lookups.
+            defs.put(descriptor, null);
         }
         return regExists;
     }
@@ -1431,9 +1435,6 @@ public class MasterDefRegistryImpl implements MasterDefRegistry {
      * @param descriptor - the descriptor use for the key
      */
     private String makeNonUidGlobalKey(@NonNull DefDescriptor<?> descriptor) {
-        AuraContext context = this.currentCC == null
-                ? Aura.getContextService().getCurrentContext()
-                : currentCC.context;
         return makeLocalKey(descriptor);
     }
 

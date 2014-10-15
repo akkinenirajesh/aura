@@ -39,6 +39,11 @@
     		self.ontouchend(cmp, e);
     	};
     	
+    	cmp._preventEvent = function(e) {
+    		e.stopPropagation();
+    		e.preventDefault();
+    	};
+    	
     	cmp._onInfiniteListRowOpen = function (e) {
     		// 1. close the open row if it exists 
     		// 2. make the target row the open row
@@ -85,6 +90,7 @@
     	var ul = cmp.getElement();
     	ul.addEventListener(this.getEventNames().move, cmp._ontouchmove, false);
         ul.addEventListener(this.getEventNames().end, cmp._ontouchend, false);
+        ul.addEventListener("dragstart", cmp._preventEvent, true);
     },
    
     /**
@@ -94,6 +100,7 @@
     	var ul = cmp.getElement();
     	ul.removeEventListener(this.getEventNames().move, cmp._ontouchmove);
     	ul.removeEventListener(this.getEventNames().end, cmp._ontouchend);
+    	ul.removeEventListener("dragstart", cmp._preventEvent, true);
     },
     
     /**
@@ -161,7 +168,7 @@
     ontouchmove: function (cmp, e) {   
     	var point = null, // must be explicitly null
             swipe, axis, percentage;
-    	
+
     	// If a row is closing or the interaction has been blocked, 
     	// bounce the event and return.
         if (cmp._isClosing || cmp._isSnapping || this.isBlocked(cmp)) {
@@ -196,7 +203,7 @@
                 // Positive displacement is a 'open' gesture.
             	// Negative displacement is an 'close' gesture.
                 if (swipe.diffX > 0) {
-                	percentage = this.getWidthPercentage(cmp, swipe.body, (swipe.absX + swipe.initialPosition));
+                	percentage = this.getWidthPercentage(cmp, swipe.body, swipe.absX + swipe.initialPosition);
                 	swipe.percentage = -percentage;
                 	
                 	if (swipe.percentage >= -(this.OPEN_PERCENTAGE)) { 
@@ -205,10 +212,10 @@
                 }
                 else {
                 	percentage = this.getWidthPercentage(cmp, swipe.body, (swipe.absX + (cmp._bodyLength - swipe.initialPosition)));
-                	swipe.percentage = -(100 - percentage);
+                	swipe.percentage = -this.getWidthPercentage(cmp, swipe.body, swipe.absX);
                 	
-                	if (swipe.percentage <= 0) {
-                		this.translateX(cmp, swipe.body, swipe.percentage);
+                	if (cmp._isInteractionOnOpenRow && swipe.percentage <= 0 && percentage <= 100) {
+                		this.translateX(cmp, swipe.body, -(100 - percentage));
                 	}
                 }
             }
@@ -218,7 +225,7 @@
             	// Cancel all further events.
                 e.stopPropagation();
                 e.preventDefault();
-                
+
             	this.closeRowBlockAndReset(cmp, swipe);
             }
     	}
@@ -232,7 +239,7 @@
     ontouchend: function (cmp, e) {
     	var swipe = cmp._swipe,
     		percentage, shouldSnapOpen;
-    	
+
     	// Use 'percentage' field on 'swipe' to determine the position of the row.
         if (swipe && swipe.hasOwnProperty('percentage')) {
         	percentage = Math.abs(swipe.percentage);
@@ -259,8 +266,20 @@
 		    			$A.util.removeClass(cmp._openRow, 'open');
 		    			cmp._openRow = null;
 		    		}
+        		} else {
+        			if (swipe.diffX > 0) {
+        				this.translateX(cmp, swipe.body, 0);
+		    			$A.util.removeClass(cmp._openRow, 'open');
+		    			cmp._openRow = null;
+		    		} else {
+                        this.translateX(cmp, swipe.body, -(this.OPEN_PERCENTAGE));
+		    			
+		    			// Create '_openRow' reference after timeout 'snap' has completed.
+		    			// Creating the reference too soon could cause a 'close' animation to also occur. 
+		    			shouldSnapOpen = true; 
+		    		}
         		}
-        		
+
 	    		setTimeout(function () {
         			cmp._isSnapping = false;
         			swipe.body.style.transition = '';
@@ -274,9 +293,9 @@
         	
         	// Prevent anything else from happening (clicks, etc).
         	e.stopPropagation();
-            e.preventDefault(); 
+            e.preventDefault();
         }
-        
+
         // Reset '_isBlockedInteraction' so that future touch events are not cancelled.
         // This is here because the touch gesture might last longer than the animation.
         // A 'blocked interaction' means that all pointer events are cancelled as long as 
@@ -329,7 +348,7 @@
         // Perform close operation.
     	swipe.body.style.transition = 'all ' + this.CLOSE_TIMEOUT + 'ms';
         this.translateX(cmp, swipe.body, 0);
-        
+
         // Null these fields as 'touchend' will not execute.
         $A.util.removeClass(cmp._openRow, 'open');
         cmp._openRow = null;
@@ -535,6 +554,7 @@
      */
     translateX: function (cmp, el, percent) {
         var style = 'translate3d(' + percent + '%, 0, 0)';
+        el.style.transform = style;
         el.style.webkitTransform = style;
     }
 })

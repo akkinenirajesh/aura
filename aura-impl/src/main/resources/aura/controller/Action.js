@@ -56,6 +56,7 @@ function Action(def, suffix, method, paramDefs, background, cmp, caboose) {
     this.storable = false;
     this.caboose = caboose;
     this.allAboardCallback = undefined;
+    this.abortable = undefined;
 
     this.pathStack = [];
     this.canCreate = true;
@@ -484,7 +485,7 @@ Action.prototype.wrapCallback = function(scope, callback) {
     this.setCallback(this, function(action, cmp) {
         var cb = nestedCallbacks[this.getState()];
         if (cb && cb.fn) {
-            cb.fn.call(cb.s, this, cmp);
+            cb.fn.call(cb.s, action, cmp);
         }
         outerCallback.call(outerScope, this, cmp);
         this.callbacks = nestedCallbacks;
@@ -531,6 +532,24 @@ Action.prototype.runDeprecated = function(evt) {
         this.state = "FAILURE";
         $A.warning("Action failed: " + this.cmp.getDef().getDescriptor().getQualifiedName() + " -> "
                    + this.def.getName(), e);
+        if (this.getDef().getDescriptor() !== "aura://ComponentController/ACTION$reportFailedAction") {
+            // Post the action failure to the server, where we can keep track of it for bad client code.
+            // But don't keep re-posting if the report of failure fails.  Do we want this to be production
+            // mode only or similar?
+            var reportAction = $A.get("c.aura://ComponentController.reportFailedAction");
+            reportAction.setStorable({
+                "ignoreExisting" : true
+            });
+            reportAction.setAbortable(false);
+            reportAction.setParams({ 
+                "failedAction": this.getDef().getDescriptor(),
+                "failedId": this.getId(),
+                "clientError": e.toString(),
+                "clientStack": e.stack   // Note that stack is non-standard, and even if present, may be obfuscated
+            });
+            reportAction.setCallback(this, function(a) { /* do nothing */ });
+            $A.clientService.enqueueAction(reportAction);
+        }
     }
 };
 
@@ -773,12 +792,32 @@ Action.prototype.abort = function() {
 };
 
 /**
- * Marks the Action as abortable. For server-side Actions only.
+ * Marks the Action as abortable. For server-side Actions only. Optionally set its abortable key. The key is used
+ * to determine which abortable actions to clear when enqueued. Passing undefined or null will enable abortable and
+ * set to default "".
  *
  * @public
+ *
+ * @param {String|Boolean} [key] abortable key or boolean to disable or enable default key of ""
  */
-Action.prototype.setAbortable = function() {
-    this.abortable = true;
+Action.prototype.setAbortable = function(key) {
+    if (key !== false) {
+        // set key to default "" otherwise, string value of key
+        this.abortable = ($A.util.isUndefinedOrNull(key) || key === true) ? "" : key + "";
+    } else {
+        this.abortable = undefined;
+    }
+};
+
+/**
+ * Returns abortable key
+ *
+ * @public
+ *
+ * @returns {String} abortable key
+ */
+Action.prototype.getAbortableKey = function() {
+    return this.abortable;
 };
 
 /**
@@ -797,7 +836,7 @@ Action.prototype.isRefreshAction = function() {
  * @returns {Boolean} The function is abortable (true), or false otherwise.
  */
 Action.prototype.isAbortable = function() {
-    return this.abortable || false;
+    return !$A.util.isUndefinedOrNull(this.abortable);
 };
 
 /**

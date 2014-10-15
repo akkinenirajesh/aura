@@ -28,6 +28,8 @@ import org.auraframework.throwable.quickfix.QuickFixException;
 
 public class ComponentImplTest extends AuraImplTestCase {
 
+    protected final static String baseComponentTag = "<aura:component %s>%s</aura:component>";
+
     public ComponentImplTest(String name) {
         super(name);
     }
@@ -78,5 +80,4 @@ public class ComponentImplTest extends AuraImplTestCase {
         AttributeSet attributes = cmp.getAttributes();
 		attributes.set(Collections.singleton(adr));
 	}
-
 }

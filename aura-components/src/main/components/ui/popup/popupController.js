@@ -15,7 +15,7 @@
  */
 ({
     doInit: function(component, event, helper) {
-        helper.setParentOnChildren(component, event);
+        helper.setEventHandlersOnChildren(component, event);
     },
 
     onTriggerPress: function(component, event, helper) {

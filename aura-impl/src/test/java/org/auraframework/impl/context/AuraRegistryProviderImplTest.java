@@ -25,7 +25,7 @@ import org.auraframework.adapter.ComponentLocationAdapter;
 
 import org.auraframework.impl.AuraImplTestCase;
 
-import org.auraframework.test.annotation.TestLabels;
+import org.auraframework.test.annotation.AuraTestLabels;
 
 public class AuraRegistryProviderImplTest extends AuraImplTestCase {
     public AuraRegistryProviderImplTest(String name) {
@@ -38,10 +38,10 @@ public class AuraRegistryProviderImplTest extends AuraImplTestCase {
         }
     }
 
-    @TestLabels("auraSanity")
+    @AuraTestLabels("auraSanity")
     public void testAllRegistries() throws Exception {
         Collection<ComponentLocationAdapter> markupLocations;
-        List<File> broken = new ArrayList<File>();
+        List<File> broken = new ArrayList<>();
 
         markupLocations = new AuraRegistryProviderImplOverride().testGetAllComponentLocationAdapters();
         for (ComponentLocationAdapter location : markupLocations) {

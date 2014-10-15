@@ -30,7 +30,7 @@ import org.auraframework.system.AuraContext.Authentication;
 import org.auraframework.system.AuraContext.Format;
 import org.auraframework.system.AuraContext.Mode;
 import org.auraframework.test.AuraHttpTestCase;
-import org.auraframework.test.annotation.TestLabels;
+import org.auraframework.test.annotation.AuraTestLabels;
 import org.auraframework.test.annotation.ThreadHostileTest;
 import org.auraframework.util.json.Json;
 import org.auraframework.util.json.JsonReader;
@@ -73,7 +73,7 @@ public class AuraServletCacheInvalidationHttpTest extends AuraHttpTestCase {
      * 
      * @throws Exception
      */
-    @TestLabels("auraSanity")
+    @AuraTestLabels("auraSanity")
     public void testPostRequestWithValidUID() throws Exception {
         AuraContext ctx = startContext("auratest:test_TokenValidation", ComponentDef.class);
         HttpPost post = getPostMethod(ctx, false);
@@ -100,11 +100,11 @@ public class AuraServletCacheInvalidationHttpTest extends AuraHttpTestCase {
      * @throws Exception
      */
     private HttpPost getPostMethod(AuraContext ctx, boolean modified) throws Exception {
-        Map<String, Object> message = new HashMap<String, Object>();
-        Map<String, Object> actionInstance = new HashMap<String, Object>();
+        Map<String, Object> message = new HashMap<>();
+        Map<String, Object> actionInstance = new HashMap<>();
         actionInstance.put("descriptor",
                 "java://org.auraframework.impl.java.controller.JavaTestController/ACTION$getString");
-        Map<String, Object> actionParams = new HashMap<String, Object>();
+        Map<String, Object> actionParams = new HashMap<>();
         actionParams.put("param", "some string");
         actionInstance.put("params", actionParams);
         @SuppressWarnings("rawtypes")
@@ -113,7 +113,7 @@ public class AuraServletCacheInvalidationHttpTest extends AuraHttpTestCase {
 
         String jsonMessage = Json.serialize(message);
 
-        Map<String, String> params = new HashMap<String, String>();
+        Map<String, String> params = new HashMap<>();
         params.put("message", jsonMessage);
         params.put("aura.token", getCsrfToken());
 

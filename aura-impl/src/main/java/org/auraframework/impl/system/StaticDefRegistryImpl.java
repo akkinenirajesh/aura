@@ -24,7 +24,7 @@ import org.auraframework.def.DefDescriptor;
 import org.auraframework.def.DefDescriptor.DefType;
 import org.auraframework.def.Definition;
 import org.auraframework.def.DescriptorFilter;
- 
+import org.auraframework.impl.source.SourceFactory;
 import org.auraframework.system.Source;
 
 import com.google.common.collect.Maps;
@@ -37,10 +37,10 @@ public class StaticDefRegistryImpl<T extends Definition> extends DefRegistryImpl
     private static final long serialVersionUID = 1L;
     protected final Map<DefDescriptor<T>, T> defs;
     private static final String WILD = "*";
-    protected final Map<DefDescriptor<T>, Source<T>> sources;
+    private transient SourceFactory sourceFactory = null;
 
     public StaticDefRegistryImpl(Set<DefType> defTypes, Set<String> prefixes, Set<String> namespaces, Collection<T> defs) {
-        this(defTypes, prefixes, namespaces, Maps.<DefDescriptor<T>, T> newHashMapWithExpectedSize(defs.size()), null);
+        this(defTypes, prefixes, namespaces, Maps.<DefDescriptor<T>, T> newHashMapWithExpectedSize(defs.size()));
         for (T def : defs) {
             @SuppressWarnings("unchecked")
             DefDescriptor<T> desc = (DefDescriptor<T>) def.getDescriptor();
@@ -49,15 +49,18 @@ public class StaticDefRegistryImpl<T extends Definition> extends DefRegistryImpl
     }
 
     public StaticDefRegistryImpl(Set<DefType> defTypes, Set<String> prefixes, Set<String> namespaces,
-            Map<DefDescriptor<T>, T> defs, Map<DefDescriptor<T>, Source<T>> sources) {
+            Map<DefDescriptor<T>, T> defs) {
         super(defTypes, prefixes, namespaces);
         this.defs = defs;
-        this.sources = sources;
     }
 
     @Override
     public T getDef(DefDescriptor<T> descriptor) {
         return defs.get(descriptor);
+    }
+
+    public void setSourceFactory(SourceFactory sourceFactory) {
+        this.sourceFactory = sourceFactory;
     }
 
     @Override
@@ -70,7 +73,7 @@ public class StaticDefRegistryImpl<T extends Definition> extends DefRegistryImpl
         String namespace = matcher.getNamespace();
         String prefix = matcher.getPrefix();
         DefType defType = matcher.getDefType();
-        Set<DefDescriptor<T>> ret = new HashSet<DefDescriptor<T>>();
+        Set<DefDescriptor<T>> ret = new HashSet<>();
         for (DefDescriptor<T> key : defs.keySet()) {
 
             if (defType == key.getDefType() && key.getPrefix().equalsIgnoreCase(prefix)
@@ -84,7 +87,7 @@ public class StaticDefRegistryImpl<T extends Definition> extends DefRegistryImpl
 
     @Override
     public Set<DefDescriptor<?>> find(DescriptorFilter matcher) {
-        Set<DefDescriptor<?>> ret = new HashSet<DefDescriptor<?>>();
+        Set<DefDescriptor<?>> ret = new HashSet<>();
 
         for (DefDescriptor<T> key : defs.keySet()) {
             if (matcher.matchDescriptor(key)) {
@@ -106,8 +109,8 @@ public class StaticDefRegistryImpl<T extends Definition> extends DefRegistryImpl
 
     @Override
     public Source<T> getSource(DefDescriptor<T> descriptor) {
-        if (sources != null) {
-            return sources.get(descriptor);
+        if (sourceFactory != null) {
+            return sourceFactory.getSource(descriptor);
         }
         return null;
     }

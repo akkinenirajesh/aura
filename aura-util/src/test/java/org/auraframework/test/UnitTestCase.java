@@ -30,7 +30,7 @@ import java.util.logging.Logger;
 
 import junit.framework.TestCase;
 
-import org.auraframework.test.annotation.TestLabels;
+import org.auraframework.test.annotation.AuraTestLabels;
 import org.auraframework.test.annotation.UnitTest;
 import org.auraframework.test.perf.metrics.PerfMetrics;
 import org.auraframework.test.perf.metrics.PerfMetricsComparator;
@@ -109,7 +109,7 @@ public abstract class UnitTestCase extends TestCase {
             return;
         }
         if (tearDownSteps == null) {
-            tearDownSteps = new Stack<Runnable>();
+            tearDownSteps = new Stack<>();
         }
         tearDownSteps.push(toRun);
     }
@@ -206,7 +206,7 @@ public abstract class UnitTestCase extends TestCase {
 
     protected void deleteFileOnTeardown(File file) {
         if (tempFiles == null) {
-            tempFiles = new LinkedList<File>();
+            tempFiles = new LinkedList<>();
         }
         tempFiles.add(file);
     }
@@ -282,7 +282,7 @@ public abstract class UnitTestCase extends TestCase {
     }
 
     // add annotation's value to current Set
-    private void addLabels(Set<String> labels, TestLabels anno) {
+    private void addLabels(Set<String> labels, AuraTestLabels anno) {
         if (anno != null) {
             String value = anno.value();
             if (value != null && !value.isEmpty()) {
@@ -306,7 +306,7 @@ public abstract class UnitTestCase extends TestCase {
         } else {
             labels = getTestLabels(supa);
         }
-        TestLabels anno = c.getAnnotation(TestLabels.class);
+        AuraTestLabels anno = c.getAnnotation(AuraTestLabels.class);
         addLabels(labels, anno);
         return labels;
     }
@@ -321,7 +321,7 @@ public abstract class UnitTestCase extends TestCase {
         Set<String> labels = getTestLabels(clazz);
         try {
             Method method = clazz.getMethod(getName());
-            TestLabels anno = method.getAnnotation(TestLabels.class);
+            AuraTestLabels anno = method.getAnnotation(AuraTestLabels.class);
             addLabels(labels, anno);
         } catch (NoSuchMethodException e) {
             // dynamic tests should override this function

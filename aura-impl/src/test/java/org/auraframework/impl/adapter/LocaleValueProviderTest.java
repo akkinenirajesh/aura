@@ -17,7 +17,9 @@ package org.auraframework.impl.adapter;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import org.auraframework.Aura;
 import org.auraframework.def.ComponentDef;
@@ -35,45 +37,42 @@ public class LocaleValueProviderTest extends AuraImplTestCase {
         super(name);
     }
 
-    private interface LocaleProperty {
-        final PropertyReference language = new PropertyReferenceImpl(
-                LocaleValueProvider.LANGUAGE, null);
-        final PropertyReference country = new PropertyReferenceImpl(
-                LocaleValueProvider.COUNTRY, null);
-        final PropertyReference variant = new PropertyReferenceImpl(
-                LocaleValueProvider.VARIANT, null);
-        final PropertyReference numberformat = new PropertyReferenceImpl(
-                LocaleValueProvider.NUMBER_FORMAT, null);
-        final PropertyReference percentformat = new PropertyReferenceImpl(
-                LocaleValueProvider.PERCENT_FORMAT, null);
-        final PropertyReference currencyformat = new PropertyReferenceImpl(
-                LocaleValueProvider.CURRENCY_FORMAT, null);
-        final PropertyReference timezone = new PropertyReferenceImpl(
-                LocaleValueProvider.TIME_ZONE, null);
-        final PropertyReference currency_code = new PropertyReferenceImpl(
-                LocaleValueProvider.CURRENCY_CODE, null);
-        final PropertyReference decimal = new PropertyReferenceImpl(
-                LocaleValueProvider.DECIMAL, null);
-        final PropertyReference grouping = new PropertyReferenceImpl(
-                LocaleValueProvider.GROUPING, null);
-        final PropertyReference currency = new PropertyReferenceImpl(
-                LocaleValueProvider.CURRENCY, null);
+    private enum LocaleProperty {
+        language(LocaleValueProvider.LANGUAGE),
+        country(LocaleValueProvider.COUNTRY),
+        variant(LocaleValueProvider.VARIANT),
+        langLocale(LocaleValueProvider.LANGUAGE_LOCALE),
+        numberFormat(LocaleValueProvider.NUMBER_FORMAT),
+        percentFormat(LocaleValueProvider.PERCENT_FORMAT),
+        currencyFormat(LocaleValueProvider.CURRENCY_FORMAT),
+        dateFormat(LocaleValueProvider.DATE_FORMAT),
+        datetimeFormat(LocaleValueProvider.DATETIME_FORMAT),
+        timeFormat(LocaleValueProvider.TIME_FORMAT),
+        timezone(LocaleValueProvider.TIME_ZONE),
+        timezoneFileName(LocaleValueProvider.TIME_ZONE_FILE_NAME),
+        currencyCode(LocaleValueProvider.CURRENCY_CODE),
+        decimal(LocaleValueProvider.DECIMAL),
+        grouping(LocaleValueProvider.GROUPING),
+        currency(LocaleValueProvider.CURRENCY),
+        zero(LocaleValueProvider.ZERO_DIGIT);
+         
+        private PropertyReferenceImpl propRef;
+
+        LocaleProperty(String name) {
+            propRef = new PropertyReferenceImpl(name, null);
+        }
+ 
+        public PropertyReference getRef() {
+            return propRef;
+        }
     }
 
     public void testValidateLocaleProperty() throws Exception {
-    	LocaleValueProvider lvp = new LocaleValueProvider();
-        lvp.validate(LocaleProperty.language);
-        lvp.validate(LocaleProperty.country);
-        lvp.validate(LocaleProperty.variant);
-        lvp.validate(LocaleProperty.numberformat);
-        lvp.validate(LocaleProperty.percentformat);
-        lvp.validate(LocaleProperty.currencyformat);
-        lvp.validate(LocaleProperty.timezone);
-        lvp.validate(LocaleProperty.currency_code);
-        lvp.validate(LocaleProperty.decimal);
-        lvp.validate(LocaleProperty.grouping);
-        lvp.validate(LocaleProperty.currency);
-        
+        LocaleValueProvider lvp = new LocaleValueProvider();
+        for (LocaleProperty lp : LocaleProperty.values()) {
+            lvp.validate(lp.getRef());
+        }
+
         PropertyReference property = new PropertyReferenceImpl("badProperty", null);
         try {
             lvp.validate(property);
@@ -107,8 +106,8 @@ public class LocaleValueProviderTest extends AuraImplTestCase {
     }
     
     // Setting some locales for testing
-    public void testGetValue() throws Exception {
-    	HashMap<String, Object> defaultLocaleProperties = new HashMap<String, Object>();
+    public void testCurrency() throws Exception {
+    	HashMap<String, Object> defaultLocaleProperties = new HashMap<>();
     	defaultLocaleProperties.put(LocaleValueProvider.LANGUAGE, "en");
     	defaultLocaleProperties.put(LocaleValueProvider.COUNTRY, "US");
     	defaultLocaleProperties.put(LocaleValueProvider.CURRENCY_FORMAT, "¤#,##0.00;(¤#,##0.00)");
@@ -116,40 +115,114 @@ public class LocaleValueProviderTest extends AuraImplTestCase {
     	defaultLocaleProperties.put(LocaleValueProvider.CURRENCY, "$");
     	assertLocaleProperties(null, defaultLocaleProperties);
     	
-    	HashMap<String, Object> jaLocaleProperties = new HashMap<String, Object>();
+    	HashMap<String, Object> jaLocaleProperties = new HashMap<>();
     	jaLocaleProperties.put(LocaleValueProvider.LANGUAGE, "ja");
     	jaLocaleProperties.put(LocaleValueProvider.COUNTRY, "JP");
     	jaLocaleProperties.put(LocaleValueProvider.CURRENCY_FORMAT, "¤#,##0");
     	jaLocaleProperties.put(LocaleValueProvider.CURRENCY_CODE, "JPY");
     	jaLocaleProperties.put(LocaleValueProvider.CURRENCY, "￥");
-    	assertLocaleProperties(Locale.JAPAN, jaLocaleProperties);
+    	assertLocaleProperties(Arrays.asList(Locale.JAPAN), jaLocaleProperties);
     	
-    	HashMap<String, Object> ukLocaleProperties = new HashMap<String, Object>();
+    	HashMap<String, Object> ukLocaleProperties = new HashMap<>();
     	ukLocaleProperties.put(LocaleValueProvider.LANGUAGE, "en");
     	ukLocaleProperties.put(LocaleValueProvider.COUNTRY, "GB");
     	ukLocaleProperties.put(LocaleValueProvider.CURRENCY_FORMAT, "¤#,##0.00");
     	ukLocaleProperties.put(LocaleValueProvider.CURRENCY_CODE, "GBP");
     	ukLocaleProperties.put(LocaleValueProvider.CURRENCY, "£");
-    	assertLocaleProperties(Locale.UK, ukLocaleProperties);
+    	assertLocaleProperties(Arrays.asList(Locale.UK), ukLocaleProperties);
     }
     
-    private void assertLocaleProperties(Locale locale,
-			HashMap<String, Object> localeProperties) {
-    	AuraContext context = Aura.getContextService().getCurrentContext();
-        context.setRequestedLocales(locale == null ? null : Arrays.asList(locale));
-        LocaleValueProvider lvp = new LocaleValueProvider();
-        assertLocaleProperty(lvp, LocaleProperty.language, localeProperties.get(LocaleValueProvider.LANGUAGE));
-        assertLocaleProperty(lvp, LocaleProperty.country, localeProperties.get(LocaleValueProvider.COUNTRY));
-        assertLocaleProperty(lvp, LocaleProperty.currencyformat, localeProperties.get(LocaleValueProvider.CURRENCY_FORMAT));
-        assertLocaleProperty(lvp, LocaleProperty.currency_code, localeProperties.get(LocaleValueProvider.CURRENCY_CODE));
-        assertLocaleProperty(lvp, LocaleProperty.currency, localeProperties.get(LocaleValueProvider.CURRENCY));
-	}
+    /**
+     * this test when we pass more than one locals to current context, we only honor the FIRST one.
+     */
+    public void testMultiLocale() {
+    	HashMap<String, Object> localeProperties = new HashMap<>();
+        createLocaleProperties_ENZA(localeProperties);
+        assertLocaleProperties(Arrays.asList(new Locale("en", "ZA"), Locale.US), localeProperties);
+    }
+
+    /**
+     * tests for number and percent formats for US, South Africa(ZA) and France
+     * http://en.wikipedia.org/wiki/ISO_3166-2
+     */
+    public void testNumberAndPercentFormats() {
+    	HashMap<String, Object> localeProperties = new HashMap<>();
+        createLocaleProperties_ENUS(localeProperties);
+        assertLocaleProperties(Arrays.asList(Locale.US), localeProperties);
+        
+        localeProperties.clear();
+        createLocaleProperties_ENZA(localeProperties);
+        assertLocaleProperties(Arrays.asList(new Locale("en", "ZA")), localeProperties);
+        
+        localeProperties.clear();
+        createLocaleProperties_FRFR(localeProperties);
+        assertLocaleProperties(Arrays.asList(new Locale("fr", "FR")), localeProperties);
+    }
     
+    private void assertLocaleProperties(List<Locale> localeList,
+            HashMap<String, Object> localeProperties) {
+        AuraContext context = Aura.getContextService().getCurrentContext();
+        context.setRequestedLocales(localeList == null ? null : localeList);
+        LocaleValueProvider lvp = new LocaleValueProvider();
+        String countryName = localeList == null ? "" : localeList.get(0).getCountry();
+        for (Map.Entry<String, Object> entry : localeProperties.entrySet()) {
+            assertLocaleProperty(lvp, entry.getKey(), entry.getValue(), countryName);
+        }
+    }
+
     private void assertLocaleProperty(LocaleValueProvider lvp,
-			PropertyReference property, Object expected) {
-    	 assertEquals("Unexpected value for " + property.toString(), expected,
-                 lvp.getValue(property));
-	}
+            String propName, Object expected, String countryName) {
+         assertEquals("Unexpected value : " + propName+" of country: "+countryName, expected,
+             lvp.getValue(LocaleProperty.valueOf(propName).getRef()));
+    }
+    
+    private void createLocaleProperties_ENZA(HashMap<String, Object> localeProperties) {
+        localeProperties.put(LocaleValueProvider.LANGUAGE, "en");
+        localeProperties.put(LocaleValueProvider.COUNTRY, "ZA");
+        localeProperties.put(LocaleValueProvider.CURRENCY_FORMAT, "¤#\u00A0##0,00");
+        localeProperties.put(LocaleValueProvider.GROUPING, '\u00A0');
+        localeProperties.put(LocaleValueProvider.DECIMAL, ',');
+        localeProperties.put(LocaleValueProvider.NUMBER_FORMAT, "#\u00A0##0,###");
+        localeProperties.put(LocaleValueProvider.PERCENT_FORMAT, "#\u00A0##0%");
+        localeProperties.put(LocaleValueProvider.DATE_FORMAT, "dd MMM yyyy");
+        localeProperties.put(LocaleValueProvider.TIME_FORMAT, "h:mm:ss a");
+        localeProperties.put(LocaleValueProvider.DATETIME_FORMAT, "dd MMM yyyy h:mm:ss a");
+        localeProperties.put(LocaleValueProvider.LANGUAGE_LOCALE, "en_ZA");
+        localeProperties.put(LocaleValueProvider.ZERO_DIGIT, '0');
+        return;
+    }
+    
+    private void createLocaleProperties_FRFR(HashMap<String, Object> localeProperties) {
+    	localeProperties.put(LocaleValueProvider.LANGUAGE, "fr");
+        localeProperties.put(LocaleValueProvider.COUNTRY, "FR");
+        localeProperties.put(LocaleValueProvider.CURRENCY_FORMAT, "#\u00A0##0,00'\u00A0'¤");
+        localeProperties.put(LocaleValueProvider.GROUPING, '\u00A0');
+        localeProperties.put(LocaleValueProvider.DECIMAL, ',');
+        localeProperties.put(LocaleValueProvider.NUMBER_FORMAT, "#\u00A0##0,###");
+        localeProperties.put(LocaleValueProvider.PERCENT_FORMAT, "#\u00A0##0'\u00A0'%");
+        localeProperties.put(LocaleValueProvider.DATE_FORMAT, "d MMM yyyy");
+        localeProperties.put(LocaleValueProvider.TIME_FORMAT, "HH:mm:ss");
+        localeProperties.put(LocaleValueProvider.DATETIME_FORMAT, "d MMM yyyy HH:mm:ss");
+        localeProperties.put(LocaleValueProvider.LANGUAGE_LOCALE, "fr_FR");
+        localeProperties.put(LocaleValueProvider.ZERO_DIGIT, '0');
+        return;
+    }
+    
+    private void createLocaleProperties_ENUS(HashMap<String, Object> localeProperties) {
+    	 localeProperties.put(LocaleValueProvider.LANGUAGE, "en");
+         localeProperties.put(LocaleValueProvider.COUNTRY, "US");
+         localeProperties.put(LocaleValueProvider.CURRENCY_FORMAT, "¤#,##0.00;(¤#,##0.00)");
+         localeProperties.put(LocaleValueProvider.GROUPING, ',');
+         localeProperties.put(LocaleValueProvider.DECIMAL, '.');
+         localeProperties.put(LocaleValueProvider.NUMBER_FORMAT, "#,##0.###");
+         localeProperties.put(LocaleValueProvider.PERCENT_FORMAT, "#,##0%");
+         localeProperties.put(LocaleValueProvider.DATE_FORMAT, "MMM d, yyyy");
+         localeProperties.put(LocaleValueProvider.TIME_FORMAT, "h:mm:ss a");
+         localeProperties.put(LocaleValueProvider.DATETIME_FORMAT, "MMM d, yyyy h:mm:ss a");
+         localeProperties.put(LocaleValueProvider.LANGUAGE_LOCALE, "en_US");
+         localeProperties.put(LocaleValueProvider.ZERO_DIGIT, '0');
+        return;
+    }
 
     /**
      * Test to verify getValue returns null for undefined property

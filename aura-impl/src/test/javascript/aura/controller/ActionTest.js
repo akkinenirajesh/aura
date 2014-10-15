@@ -462,8 +462,7 @@ Test.Aura.Controller.ActionTest = function() {
                 isFunction : function() {
                     return false;
                 }
-            },
-
+            }
         });
 
         [ Fact ]
@@ -578,11 +577,24 @@ Test.Aura.Controller.ActionTest = function() {
             var expectedName = "expectedName";
             var expectedQualifiedName = "expectedQN";
             var expected = "Action failed: " + expectedQualifiedName + " -> " + expectedName;
+            var sentToServer = false;
+
             var mockAssert = Mocks.GetMock(Object.Global(), "$A", {
                 assert : function(param) {
                 },
                 warning : function(msg) {
                     actual = msg;
+                },
+                get : function(actDesc) {
+                	return {
+                        setStorable: function() { },
+                        setAbortable: function() { },
+                        setParams: function() { },
+                        setCallback: function() { }
+                	};
+                },
+                clientService: {
+                	enqueueAction: function() { sentToServer = true; }
                 }
             });
             var cmp = {
@@ -601,18 +613,25 @@ Test.Aura.Controller.ActionTest = function() {
             var target = new Action();
             target.cmp = cmp;
             target.def = {
-                                getName : function() {
-                                        return expectedName;
-                                },
-                isClientAction : function() {
-                }
-                        };
+                    getDescriptor: function() {
+                        return { 
+                            getQualifiedName : function() {
+                                return expectedQualifiedName;
+                            }
+                        }
+                    },
+                    getName : function() {
+                        return expectedName;
+                    },
+                    isClientAction : function() { }
+                };
             var actual = null;
 
             // Act
             mockAssert(function() {
                 target.runDeprecated();
             })
+            Assert.Equal(true, sentToServer);
 
             // Assert
                         // FIXME: re-enable after client side creation fixed.
@@ -661,10 +680,24 @@ Test.Aura.Controller.ActionTest = function() {
         function SetsStateToFailureOnException() {
             // Arrange
             var expectedState = "FAILURE";
+            // We also use this test to check that reportFailure failures are NOT re-sent
+            var sentToServer = 0;
+
             var mockAssert = Mocks.GetMock(Object.Global(), "$A", {
                 assert : function(param) {
                 },
                 warning : function() {
+                },
+                get : function(actDesc) {
+                	return {
+                        setStorable: function() { },
+                        setAbortable: function() { },
+                        setParams: function() { },
+                        setCallback: function() { }
+                	};
+                },
+                clientService: {
+                	enqueueAction: function() { sentToServer++; }
                 }
             });
             var cmp = {
@@ -682,11 +715,16 @@ Test.Aura.Controller.ActionTest = function() {
             var target = new Action();
             target.cmp = cmp;
             target.def = {
-                                getName : function() {
-                                },
-                isClientAction : function() {
-                }
-                        };
+                    getDescriptor: function() {
+                        return { 
+                            getQualifiedName : function() {
+                                return "aura://ComponentController.reportFailedAction";
+                            }
+                        }
+                    },
+                    getName : function() { },
+                    isClientAction : function() { }
+               };
 
             // Act
             mockAssert(function() {
@@ -695,6 +733,7 @@ Test.Aura.Controller.ActionTest = function() {
 
             // Assert
             Assert.Equal(expectedState, target.state);
+            Assert.Equal(1, sentToServer);
         }
     }
 
@@ -980,13 +1019,11 @@ Test.Aura.Controller.ActionTest = function() {
         var mockContext = Mocks.GetMock(Object.Global(), "$A", {
             getContext : function() {
                 return {
-                    joinComponentConfigs : function() {
-                    },
-                    finishComponentConfigs : function() {
-                    },
-                                        getNum : function() {
-                                            return 0;
-                                        }
+                    joinComponentConfigs : function() {},
+                    finishComponentConfigs : function() {},
+                    getNum : function() {
+                        return 0;
+                    }
                 };
             }
         });
@@ -1023,12 +1060,9 @@ Test.Aura.Controller.ActionTest = function() {
 
             // Act
             target.finishAction({
-                setCurrentAction : function() {
-                },
-                                joinComponentConfigs : function() {
-                                },
-                                finishComponentConfigs : function() {
-                                }
+                setCurrentAction: function () {},
+                joinComponentConfigs: function () {},
+                finishComponentConfigs: function () {}
             });
 
             // Assert
@@ -1038,12 +1072,12 @@ Test.Aura.Controller.ActionTest = function() {
         [ Fact ]
         function CallsCompleteGroups() {
             var target = new Action();
-                        var context = { setCurrentAction : function() { } };
+            var context = { setCurrentAction : function() { } };
             target.completeGroups = Stubs.GetMethod(null);
-                        target.getStorage = function () { return false; };
-                        target.getId = function () { return "1"; };
+            target.getStorage = function () { return false; };
+            target.getId = function () { return "1"; };
 
-                        target.finishAction(context);
+            target.finishAction(context);
 
             Assert.Equal([ {
                 Arguments : {},
@@ -1059,16 +1093,16 @@ Test.Aura.Controller.ActionTest = function() {
                         target.getStorage = function () { return false; };
                         target.getId = function () { return "1"; };
 
-            var error = Record.Exception(function() {
-                            mockContext(function() {
-                target.finishAction({
-                                    setCurrentAction : function() {
-                                    },
-                                    joinComponentConfigs : function() {
-                                        throw new Error("intentional");
-                                    }
+            var error = Record.Exception(function () {
+                mockContext(function () {
+                    target.finishAction({
+                        setCurrentAction: function () {
+                        },
+                        joinComponentConfigs: function () {
+                            throw new Error("intentional");
+                        }
+                    });
                 });
-                            });
             });
 
             Assert.Equal([ {
@@ -1157,33 +1191,145 @@ Test.Aura.Controller.ActionTest = function() {
 
     [ Fixture ]
     function SetAbortable() {
+
+        var mock = Mocks.GetMock(Object.Global(), "$A", {
+            util : {
+                isUndefinedOrNull: function (obj) {
+                    return obj === undefined || obj === null;
+                }
+            }
+        });
+
+        [ Fact ]
+        function SetsAbortableToTrueByDefault() {
+            // Arrange
+            var target = new Action();
+            var abortable;
+
+            // Act
+            mock(function() {
+                target.setAbortable();
+                abortable = target.isAbortable();
+            });
+
+            // Assert
+            Assert.True(abortable);
+            Assert.Equal("", target.abortable);
+        }
+
         [ Fact ]
         function SetsAbortableToTrue() {
             // Arrange
             var target = new Action();
+            var abortable;
 
             // Act
-            target.setAbortable();
+            mock(function() {
+                target.setAbortable(true);
+                abortable = target.isAbortable();
+            });
 
             // Assert
-            Assert.True(target.abortable);
+            Assert.True(abortable);
+            Assert.Equal("", target.getAbortableKey());
+        }
+
+        [ Fact ]
+        function SetsAbortableToFalse() {
+            // Arrange
+            var target = new Action();
+            var abortable;
+
+            // Act
+            mock(function() {
+                target.setAbortable(false);
+                abortable = target.isAbortable();
+            });
+
+            // Assert
+            Assert.False(abortable);
+            Assert.Equal(undefined, target.abortable);
+        }
+
+        [ Fact ]
+        function SetsAbortableToNull() {
+            // Arrange
+            var target = new Action();
+            var abortable;
+
+            // Act
+            mock(function() {
+                target.setAbortable(null);
+                abortable = target.isAbortable();
+            });
+
+            // Assert
+            Assert.True(abortable);
+            Assert.Equal("", target.getAbortableKey());
+        }
+
+        [ Fact ]
+        function SetsAbortableToNumber() {
+            // Arrange
+            var target = new Action();
+            var abortable;
+
+            // Act
+            mock(function() {
+                target.setAbortable(1);
+                abortable = target.isAbortable();
+            });
+
+            // Assert
+            Assert.True(abortable);
+            Assert.Equal("1", target.abortable);
+        }
+
+        [ Fact ]
+        function SetsAbortableToString() {
+            // Arrange
+            var target = new Action();
+            var abortable;
+
+            // Act
+            mock(function() {
+                target.setAbortable("false");
+                abortable = target.isAbortable();
+            });
+
+            // Assert
+            Assert.True(abortable);
+            Assert.Equal("false", target.abortable);
         }
     }
 
     [ Fixture ]
     function IsAbortable() {
+
+        var mock = Mocks.GetMock(Object.Global(), "$A", {
+            util : {
+                isUndefinedOrNull: function (obj) {
+                    return obj === undefined || obj === null;
+                }
+            }
+        });
+
         [ Fact ]
         function ReturnsAbortableIfSet() {
             // Arrange
             var expected = "expected";
             var target = new Action();
             target.abortable = expected;
+            var abortable;
 
             // Act
-            var actual = target.isAbortable();
+            mock(function() {
+                abortable = target.isAbortable();
+            });
 
             // Assert
-            Assert.Equal(expected, actual);
+            Assert.True(abortable);
+            Assert.Equal(expected, target.getAbortableKey());
         }
 
         [ Fact ]
@@ -1191,9 +1337,12 @@ Test.Aura.Controller.ActionTest = function() {
             // Arrange
             var target = new Action();
             target.abortable = undefined;
+            var actual;
 
             // Act
-            var actual = target.isAbortable();
+            mock(function() {
+                actual = target.isAbortable();
+            });
 
             // Assert
             Assert.False(actual);
@@ -1261,6 +1410,16 @@ Test.Aura.Controller.ActionTest = function() {
 
     [ Fixture ]
     function SetStorable() {
+
+        var mock = Mocks.GetMock(Object.Global(), "$A", {
+            util : {
+                isUndefinedOrNull: function (obj) {
+                    return obj === undefined || obj === null;
+                }
+            },
+            assert : function() {}
+        });
+
         [ Fact ]
         function SetsStorableToTrue() {
             // Arrange
@@ -1270,11 +1429,9 @@ Test.Aura.Controller.ActionTest = function() {
             });
             var target = new Action();
             target.def = {
-                isServerAction : function() {
-                }
+                isServerAction : function() {}
             };
-            target.setAbortable = function() {
-            };
+            target.setAbortable = target.getStorageKey = function() {};
             var actual;
 
             // Act
@@ -1297,11 +1454,9 @@ Test.Aura.Controller.ActionTest = function() {
             });
             var target = new Action();
             target.def = {
-                isServerAction : function() {
-                }
+                isServerAction : function() {}
             };
-            target.setAbortable = function() {
-            };
+            target.setAbortable = target.getStorageKey = function() {};
             var actual;
 
             // Act
@@ -1325,11 +1480,9 @@ Test.Aura.Controller.ActionTest = function() {
                 });
                 var target = new Action();
                 target.def = {
-                    isServerAction : function() {
-                    }
+                    isServerAction : function() {}
                 };
-                target.setAbortable = function() {
-                };
+                target.setAbortable = target.getStorageKey = function() {};
                 var actual;
 
                 // Act
@@ -1354,12 +1507,12 @@ Test.Aura.Controller.ActionTest = function() {
             });
             var target = new Action();
             target.def = {
-                isServerAction : function() {
-                }
+                isServerAction : function() {}
             };
             target.setAbortable = function() {
                 actual = expected;
             };
+            target.getStorageKey = function() {};
             var actual = null;
 
             // Act
@@ -1389,8 +1542,7 @@ Test.Aura.Controller.ActionTest = function() {
                     return expectedReturn;
                 }
             };
-            target.setAbortable = function() {
-            };
+            target.setAbortable = target.getStorageKey = function() {};
             var actual = null;
 
             // Act
@@ -1400,6 +1552,43 @@ Test.Aura.Controller.ActionTest = function() {
 
             // Assert
             Assert.Equal(expected, actual);
+        }
+
+        [ Fact ]
+        function AssertAbortableKeyIsDefaultWhenNotProvided() {
+            // Arrange
+            var target = new Action();
+            target.def = {
+                isServerAction: function() {}
+            };
+
+            // Act
+            mock(function() {
+                target.setStorable({});
+            });
+            var actual = target.getAbortableKey();
+
+            // Assert
+            Assert.Equal("", actual);
+        }
+
+        [ Fact ]
+        function AssertAbortableKeyIsDefaultWhenNoStorableConfig() {
+            // Arrange
+            var target = new Action();
+            target.def = {
+                isServerAction: function() {}
+            };
+
+
+            // Act
+            mock(function() {
+                target.setStorable();
+            });
+            var actual = target.getAbortableKey();
+
+            // Assert
+            Assert.Equal("", actual);
         }
     }
 
@@ -1502,15 +1691,15 @@ Test.Aura.Controller.ActionTest = function() {
                 }
             });
             var target = new Action();
-                        target.params = undefined;
+            target.params = undefined;
             target.def = {
-                                getDescriptor : function() {
-                                        return {
-                                                toString : function() {
-                                                        return expectedDescriptor;
-                                                }
-                                        }
-                                }
+                getDescriptor: function () {
+                    return {
+                        toString: function () {
+                            return expectedDescriptor;
+                        }
+                    }
+                }
             };
 
             // Act
@@ -1532,6 +1721,7 @@ Test.Aura.Controller.ActionTest = function() {
                 }
             }
         });
+
         [ Fact ]
         function ReturnsTrueIfStorageSet() {
             var target = new Action();
@@ -1662,10 +1852,10 @@ Test.Aura.Controller.ActionTest = function() {
             }
             target.params = expectedParams;
             target.def = {
-                    getDescriptor : function() {
-                        return expectedDescriptor;
-                    }
-                        };
+                getDescriptor: function () {
+                    return expectedDescriptor;
+                }
+            };
 
             // Act
             var actual = target.toJSON();

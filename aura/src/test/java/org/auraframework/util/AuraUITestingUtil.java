@@ -19,13 +19,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
-
-import junit.framework.Assert;
 
 import org.apache.commons.lang3.StringEscapeUtils;
 import org.auraframework.test.SauceUtil;
 import org.auraframework.util.json.JsonReader;
+import org.junit.Assert;
 import org.openqa.selenium.By;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.NoSuchElementException;
@@ -49,12 +49,13 @@ public class AuraUITestingUtil {
     private final WebDriver driver;
     private long timeoutInSecs = 30;
     private int rerunCount = 0;
+    protected static final Random RAND = new Random(System.currentTimeMillis());
 
     public AuraUITestingUtil(WebDriver driver) {
         this.driver = driver;
         if (SauceUtil.areTestsRunningOnSauce()) {
             // things are slower in SauceLabs
-            timeoutInSecs = 120;
+            timeoutInSecs = 240;
         }
     }
 
@@ -465,18 +466,19 @@ public class AuraUITestingUtil {
      */
     public List<WebElement> findDomElements(final By locator) {
         WebDriverWait wait = new WebDriverWait(driver, timeoutInSecs);
-        return wait.withMessage("fail to find element in dom:"+locator.toString()).ignoring(StaleElementReferenceException.class).until(new ExpectedCondition<List<WebElement>>() {
+        return wait.withMessage("fail to find element in dom:" + locator.toString())
+                .ignoring(StaleElementReferenceException.class).until(new ExpectedCondition<List<WebElement>>() {
 
-            @Override
-            public List<WebElement> apply(WebDriver d) {
-                List<WebElement> elements = driver.findElements(locator);
-                if (elements.size() > 0 &&
-                        getBooleanEval("return arguments[0].ownerDocument === document", elements.get(0))) {
-                    return elements;
-                }
-                return null;
-            }
-        });
+                    @Override
+                    public List<WebElement> apply(WebDriver d) {
+                        List<WebElement> elements = driver.findElements(locator);
+                        if (elements.size() > 0 &&
+                                getBooleanEval("return arguments[0].ownerDocument === document", elements.get(0))) {
+                            return elements;
+                        }
+                        return null;
+                    }
+                });
     }
 
     /**
@@ -592,6 +594,66 @@ public class AuraUITestingUtil {
         WebDriverWait wait = new WebDriverWait(driver, timeoutInSecs);
         return wait.withMessage(message).until(addErrorCheck(function));
     }
+    
+    public String appCacheStatusIntToString(Integer ret) {
+    	String status = "Unknown cache state";
+    	switch (ret) {
+        case 0:
+            status = "UNCACHED";
+            break;
+        case 1:
+            status = "IDLE";
+            break;
+        case 2:
+            status = "CHECKING";
+            break;
+        case 3:
+            status = "DOWNLOADING";
+            break;
+        case 4:
+            status = "UPDATEREADY";
+            break;
+        case 5:
+            status = "OBSOLETE";
+            break;
+        }
+    	return status;
+    }
+
+    public void waitForAppCacheReady() {
+        waitUntilWithCallback(
+                new ExpectedCondition<Boolean>() {
+                    @Override
+                    public Boolean apply(WebDriver d) {
+                        return getBooleanEval("var cache=window.applicationCache;"
+                                + "return $A.util.isUndefinedOrNull(cache) || (cache.status===cache.UNCACHED)"
+                                + "||(cache.status===cache.IDLE)||(cache.status===cache.OBSOLETE);");
+                    }
+                },
+                new ExpectedCondition<String>() {
+                    @Override
+                    public String apply(WebDriver d) {
+                        Object ret = getRawEval("return window.applicationCache.status");
+                        return "Current AppCache status is " + appCacheStatusIntToString(((Long) ret).intValue());
+                    }
+                },
+                timeoutInSecs,
+                "AppCache is not Ready!");
+    }
+
+    /**
+     * @param function function we will apply again and again until timeout
+     * @param callbackWhenTimeout function we will run when timeout happens, the return will be append to other output
+     *            message, start with "Extra message from callback". we can pass in function to evaluate the client side
+     *            status, like applicationCache status
+     * @param timeoutInSecs
+     * @param message error message when timeout. notice this will get evaluated BEFORE the wait, so just use a string
+     */
+    public <V2, V1> void waitUntilWithCallback(Function<? super WebDriver, V1> function,
+            Function<? super WebDriver, V2> callbackWhenTimeout, long timeoutInSecs, String message) {
+        WebDriverWaitWithCallback wait = new WebDriverWaitWithCallback(driver, timeoutInSecs, message);
+        wait.until(function, callbackWhenTimeout);
+    }
 
     public void waitForAuraInit() {
         waitForAuraInit(null);
@@ -611,13 +673,13 @@ public class AuraUITestingUtil {
      */
     public void waitForDocumentReady() {
         waitUntil(
-        new ExpectedCondition<Boolean>() {
-            @Override
-            public Boolean apply(WebDriver d) {
-                return getBooleanEval("return document.readyState === 'complete'");
-            }
-        },
-        "Document is not Ready!");
+                new ExpectedCondition<Boolean>() {
+                    @Override
+                    public Boolean apply(WebDriver d) {
+                        return getBooleanEval("return document.readyState === 'complete'");
+                    }
+                },
+                "Document is not Ready!");
     }
 
     /**
@@ -626,29 +688,27 @@ public class AuraUITestingUtil {
      * {@link #waitForDocumentReady()}.
      */
     public void waitForAuraFrameworkReady(final Set<String> expectedErrors) {
-        WebDriverWait wait = new WebDriverWait(driver, timeoutInSecs);
-        wait.ignoring(StaleElementReferenceException.class)
-        .withMessage("Initializati​on error: Perhaps the initial GET failed")
-        .until(
-                new Function<WebDriver, Boolean>() {
-                    @Override
-                    public Boolean apply(WebDriver input) {
-                        assertNoAuraErrorMessage(expectedErrors);
-                        return isAuraFrameworkReady();
-                    }
-                });
-    }
+        WebDriverWait waitAuraPresent = new WebDriverWait(driver, timeoutInSecs);
+        waitAuraPresent.withMessage("Initialization error: Perhaps the initial GET failed")
+                .until(
+                        new Function<WebDriver, Boolean>() {
+                            @Override
+                            public Boolean apply(WebDriver input) {
+                                return (Boolean) getRawEval("return !!window.$A");
+                            }
+                        });
 
-    public void waitForAppCacheReady() {
-        waitUntil(new ExpectedCondition<Boolean>() {
-            @Override
-            public Boolean apply(WebDriver d) {
-                return
-                		getBooleanEval("var cache=window.applicationCache;"
-                        + "return $A.util.isUndefinedOrNull(cache) || "
-                        + "(cache.status===cache.UNCACHED)||(cache.status===cache.IDLE)||(cache.status===cache.OBSOLETE);");
-            }
-        },"AppCache is not Ready!");
+        WebDriverWait waitFinishedInit = new WebDriverWait(driver, timeoutInSecs);
+        waitFinishedInit.ignoring(StaleElementReferenceException.class)
+                .withMessage("Initialization error: $A present but failed to initialize")
+                .until(
+                        new Function<WebDriver, Boolean>() {
+                            @Override
+                            public Boolean apply(WebDriver input) {
+                                assertNoAuraErrorMessage(expectedErrors);
+                                return isAuraFrameworkReady();
+                            }
+                        });
     }
 
     /**
@@ -717,7 +777,7 @@ public class AuraUITestingUtil {
 
         String result = (String) getEval(jsString);
 
-        ArrayList<String> resultList = new ArrayList<String>();
+        ArrayList<String> resultList = new ArrayList<>();
         String output = "";
 
         // No errors
@@ -757,5 +817,28 @@ public class AuraUITestingUtil {
         }
         Assert.assertTrue(message + ": Mismatched classes extra = " + extra + ", missing=" + expected,
                 extra.size() == 0 && expected.size() == 0);
+    }
+
+    /**
+     * Creates a random lower case string. NOTE: this is BAD WAY to produce Strings, as the results are
+     * non-reproducible. Do not use it: call {@link #randString(int,long)} instead.
+     */
+    public String randString(int len) {
+        return randString(len, RAND);
+    }
+
+    /**
+     * Creates a random lower case string of specified length, using given pseudo-Random number generator.
+     */
+    public String randString(int len, Random rnd) {
+        byte[] buff = new byte[len];
+        for (int i = 0; i < len; i++) {
+            buff[i] = (byte) (rnd.nextInt(26) + 'a');
+        }
+        try {
+            return new String(buff, "US-ASCII");
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
     }
 }

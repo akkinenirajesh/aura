@@ -15,8 +15,14 @@
  */
 package org.auraframework.impl.adapter;
 
-import java.text.*;
-import java.util.*;
+import java.io.IOException;
+import java.text.DateFormat;
+import java.text.DateFormatSymbols;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 import org.auraframework.Aura;
 import org.auraframework.def.DefDescriptor;
@@ -26,7 +32,10 @@ import org.auraframework.impl.system.DefDescriptorImpl;
 import org.auraframework.instance.GlobalValueProvider;
 import org.auraframework.instance.ValueProviderType;
 import org.auraframework.throwable.quickfix.InvalidExpressionException;
+import org.auraframework.throwable.quickfix.QuickFixException;
 import org.auraframework.util.AuraLocale;
+import org.auraframework.util.json.Json;
+import org.auraframework.util.json.JsonSerializable;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMap.Builder;
@@ -42,6 +51,10 @@ public class LocaleValueProvider implements GlobalValueProvider {
     public static String COUNTRY = "country";
     public static String VARIANT = "variant";
     public static String LANGUAGE_LOCALE = "langLocale";
+    
+    public static String MONTH_NAME = "nameOfMonths";
+    public static String TODAY_LABEL = "labelForToday";
+    public static String WEEKDAY_NAME = "nameOfWeekdays";
     
     public static String NUMBER_FORMAT = "numberFormat";
     public static String PERCENT_FORMAT = "percentFormat";
@@ -83,6 +96,14 @@ public class LocaleValueProvider implements GlobalValueProvider {
         builder.put(COUNTRY, lang.getCountry());
         builder.put(VARIANT, lang.getVariant());
         builder.put(LANGUAGE_LOCALE, lang.toString());
+        
+        try {
+            builder.put(MONTH_NAME, this.getNameOfMonths(al));
+            builder.put(WEEKDAY_NAME, this.getNameOfWeekdays(al));
+            builder.put(TODAY_LABEL, this.getLabelForToday());
+        } catch (QuickFixException qfe) {
+        	// Ignore
+        }
 
         // using java DateFormat because the year pattern "MMM d, y" (although valid) isn't understood by moment.js
         DateFormat dateFormat = DateFormat.getDateInstance(DateFormat.DEFAULT, dateLocale);
@@ -111,7 +132,7 @@ public class LocaleValueProvider implements GlobalValueProvider {
         // DecimalFormat is expected
         DecimalFormat df = (DecimalFormat) DecimalFormat.getNumberInstance(al.getNumberLocale());
 
-        builder.put(NUMBER_FORMAT, df.toPattern());
+        builder.put(NUMBER_FORMAT, df.toLocalizedPattern());
         DecimalFormatSymbols dfs = df.getDecimalFormatSymbols();
         builder.put(DECIMAL, dfs.getDecimalSeparator());
         builder.put(GROUPING, dfs.getGroupingSeparator());
@@ -119,11 +140,11 @@ public class LocaleValueProvider implements GlobalValueProvider {
         
         df = (DecimalFormat) DecimalFormat.getPercentInstance(al.getNumberLocale());
 
-        builder.put(PERCENT_FORMAT, df.toPattern());
+        builder.put(PERCENT_FORMAT, df.toLocalizedPattern());
         
         df = (DecimalFormat) DecimalFormat.getCurrencyInstance(al.getCurrencyLocale());
 
-        builder.put(CURRENCY_FORMAT, df.toPattern());
+        builder.put(CURRENCY_FORMAT, df.toLocalizedPattern());
         DecimalFormatSymbols cdfs = df.getDecimalFormatSymbols();
         Currency cur = cdfs.getCurrency();
         builder.put(CURRENCY_CODE, cur != null ? cur.getCurrencyCode() : "");
@@ -162,5 +183,65 @@ public class LocaleValueProvider implements GlobalValueProvider {
     @Override
     public Map<String, ?> getData() {
         return data;
+    }
+    
+    private List<LocalizedLabel> getNameOfMonths(AuraLocale locale) throws QuickFixException {
+        DateFormatSymbols monthSymbols = DateFormatSymbols.getInstance(locale.getLanguageLocale());
+        String[] months = monthSymbols.getMonths();
+        String[] shortMonths = monthSymbols.getShortMonths();
+        ArrayList<LocalizedLabel> monthList = new ArrayList<LocalizedLabel>(12);
+        for (int i = 0; i < months.length - 1; i++) {
+            monthList.add(new LocalizedLabel(months[i], shortMonths[i]));
+        }
+        return monthList;
+    }
+    
+    private String getLabelForToday() throws QuickFixException {
+        String today = Aura.getLocalizationAdapter().getLabel("Related_Lists", "task_mode_today");
+        if (today == null) {
+        	return "Today";
+        }
+        return today;
+    }
+    
+    private List<LocalizedLabel> getNameOfWeekdays(AuraLocale locale) throws QuickFixException {
+        DateFormatSymbols weekdaySymbols = DateFormatSymbols.getInstance(locale.getLanguageLocale());
+        String[] weekdays = weekdaySymbols.getWeekdays();
+        String[] shortWeekdays = weekdaySymbols.getShortWeekdays();
+        ArrayList<LocalizedLabel> weekdayList = new ArrayList<LocalizedLabel>(7);
+        for (int i = 1; i < weekdays.length; i++) {
+            weekdayList.add(new LocalizedLabel(weekdays[i], shortWeekdays[i].toUpperCase(locale.getLanguageLocale())));
+        }
+        return weekdayList;
+    }
+    
+    public static class LocalizedLabel implements JsonSerializable {
+        /** Full name of month */
+        private String fullName;
+        /** Short name of month */
+        private String shortName;
+        
+        public LocalizedLabel(String fullName, String shortName) {
+            this.fullName = fullName;
+            this.shortName = shortName;
+        }
+        
+        public String getFullName() {
+            return this.fullName;
+        }
+        
+        public String getShortName() {
+            return this.shortName;
+        }
+        
+        @Override
+        public void serialize(Json json) throws IOException {
+            json.writeMapBegin();
+            json.writeMapKey("fullName");
+            json.writeValue(this.getFullName());
+            json.writeMapKey("shortName");
+            json.writeValue(this.getShortName());                
+            json.writeMapEnd();
+        }
     }
 }

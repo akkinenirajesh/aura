@@ -29,7 +29,6 @@ import org.auraframework.def.RootDefinition;
 import org.auraframework.instance.BaseComponent;
 import org.auraframework.instance.Component;
 import org.auraframework.instance.ComponentConfig;
-import org.auraframework.instance.ValueProvider;
 import org.auraframework.instance.ValueProviderType;
 import org.auraframework.system.AuraContext;
 import org.auraframework.throwable.AuraRuntimeException;
@@ -54,12 +53,6 @@ public final class ComponentImpl extends BaseComponentImpl<ComponentDef, Compone
     public ComponentImpl(DefDescriptor<ComponentDef> descriptor, Collection<AttributeDefRef> attributeDefRefs,
             BaseComponent<?, ?> attributeValueProvider, String localId) throws QuickFixException {
         super(descriptor, attributeDefRefs, attributeValueProvider, localId);
-    }
-
-    public ComponentImpl(DefDescriptor<ComponentDef> descriptor, Collection<AttributeDefRef> attributeDefRefs,
-            BaseComponent<?, ?> attributeValueProvider, Map<String, Object> valueProviders,
-            ValueProvider delegateValueProvider) throws QuickFixException {
-        super(descriptor, attributeDefRefs, attributeValueProvider, valueProviders, delegateValueProvider);
     }
 
     @Override
